@@ -14,9 +14,20 @@ switch ($accion) {
 
         $sentenciaSQL = $conexion -> prepare("INSERT INTO libro (nombre, imagen) VALUES (:nombre, :imagen)");
         $sentenciaSQL -> bindParam(':nombre', $txtNombre);
-        $sentenciaSQL -> bindParam(':imagen', $txtImg);
-        $sentenciaSQL -> execute();
 
+        $fecha = new DateTime();
+        $nombreArchivo = ($txtImg != "")? $fecha -> getTimestamp() . "_" . $_FILES["txtImg"]["name"]:"imagen.jpg";
+
+        $tmpImagen = $_FILES["txtImg"]["tmp_name"];
+
+        if ($tmpImagen != "") {
+             
+            move_uploaded_file($tmpImagen, "../../img/" . $nombreArchivo);
+        }
+
+        $sentenciaSQL -> bindParam(':imagen', $nombreArchivo);
+        $sentenciaSQL -> execute();
+        header("Location: productos.php");
         // echo "Precionado botón Agregar";
         break;
     case 'Modificar':
@@ -27,17 +38,39 @@ switch ($accion) {
         
         
         if ($txtImg != "") {
+
+            $fecha = new DateTime();
+            $nombreArchivo = ($txtImg != "")? $fecha -> getTimestamp() . "_" . $_FILES["txtImg"]["name"]:"imagen.jpg";
+    
+            $tmpImagen = $_FILES["txtImg"]["tmp_name"];
+            move_uploaded_file($tmpImagen, "../../img/" . $nombreArchivo);
+
+            $sentenciaSQL = $conexion -> prepare("SELECT imagen FROM libro WHERE id = :id");
+            
+            $sentenciaSQL -> bindParam(':id', $txtID);
+            $sentenciaSQL -> execute();
+            $libro = $sentenciaSQL -> fetch(PDO::FETCH_LAZY);
+
+            if (isset($libro["imagen"]) && ($libro["imagen"] != "imagen.jpg")) {
+                
+                if (file_exists("../../img/" . $libro["imagen"])) {
+                    
+                    unlink("../../img/" . $libro["imagen"]);
+                }
+            }
+
             $sentenciaSQL = $conexion -> prepare("UPDATE libro SET imagen = :imagen WHERE id = :id");
             $sentenciaSQL -> bindParam(':id', $txtID);
-            $sentenciaSQL -> bindParam(':imagen', $txtImg);
+            $sentenciaSQL -> bindParam(':imagen', $nombreArchivo );
             $sentenciaSQL -> execute();
         }
 
-
+        header("Location: productos.php");
         // echo "Precionado botón Modificar";
         break;
     case 'Cancelar':
         // echo "Precionado botón Cancelar";
+        header("Location: productos.php");
         break;
     case 'Seleccionar':
         $sentenciaSQL = $conexion -> prepare("SELECT * FROM libro WHERE id = :id");
@@ -47,13 +80,28 @@ switch ($accion) {
 
         $txtNombre = $libro['nombre'];
         $txtImg = $libro['imagen'];
+
         // echo "Precionado botón Seleccionar";
         break;
     case 'Borrar':
+        $sentenciaSQL = $conexion -> prepare("SELECT imagen FROM libro WHERE id = :id");
+        $sentenciaSQL -> bindParam(':id', $txtID);
+        $sentenciaSQL -> execute();
+        $libro = $sentenciaSQL -> fetch(PDO::FETCH_LAZY);
+
+        if (isset($libro["imagen"]) && ($libro["imagen"] != "imagen.jpg")) {
+            
+            if (file_exists("../../img/" . $libro["imagen"])) {
+                
+                unlink("../../img/" . $libro["imagen"]);
+            }
+        }
 
         $sentenciaSQL = $conexion -> prepare("DELETE FROM libro WHERE id=:id");
         $sentenciaSQL -> bindParam(':id', $txtID);
         $sentenciaSQL -> execute();
+
+        header("Location: productos.php");
         // echo "Precionado botón Borrar";
         break;
     default:
@@ -77,21 +125,38 @@ $listaLibros = $sentenciaSQL -> fetchAll(PDO::FETCH_ASSOC);
             <form method="POST" enctype="multipart/form-data">
                 <div class = "form-group">
                     <label for="txtID">ID</label>
-                    <input type="text" value="<?php echo $txtID; ?>" class="form-control" id="txtID" name="txtID" placeholder="ID">
+                    <input type="text" value="<?php echo $txtID; ?>" class="form-control" id="txtID" name="txtID" required readonly placeholder="ID">
                 </div>
                 <div class="form-group">
                     <label for="txtNombre">Nombre:</label>
-                    <input type="text" value="<?php echo $txtNombre; ?>" class="form-control" id="txtNombre" name="txtNombre" placeholder="Nombre">
+                    <input type="text" value="<?php echo $txtNombre; ?>" class="form-control" id="txtNombre" name="txtNombre" placeholder="Nombre" required>
                 </div>
                 <div class="form-group">
-                    <label for="txtImg">Imagen:</label> <?php echo $txtImg; ?>
+                    <label for="txtImg">Imagen:</label> 
+
+                    <?php if($txtImg != ""){ ?>
+                            <img class="img-thumbnail rounded" src="../../img/<?php echo $txtImg; ?> " alt="" width="100">
+                    <?php } ?>
+
                     <input type="file" class="form-control" id="txtImg" name="txtImg" placeholder="Nombre">
                 </div>
                 
                 <div class="btn-group" role="group" aria-label="">
-                    <button type="submit" name="accion" value="Agregar" class="btn btn-success">Agregar</button>
-                    <button type="submit" name="accion" value="Modificar" class="btn btn-warning">Modificar</button>
-                    <button type="submit" name="accion" value="Cancelar" class="btn btn-info">Cancelar</button>
+                    <button type="submit" 
+                    name="accion" 
+                    <?php echo ($accion == "Seleccionar") ? "disabled" : "" ;?> value="Agregar" 
+                    class="btn btn-success">Agregar</button>
+
+                    <button type="submit" 
+                    name="accion" 
+                    <?php echo ($accion == "Seleccionar") ? "" : "disabled" ;?>  value="Modificar" 
+                    class="btn btn-warning">Modificar</button>
+
+                    <button type="submit" 
+                    name="accion" 
+                    <?php echo ($accion == "Seleccionar") ? "" : "disabled" ;?>
+                    value="Cancelar"
+                    class="btn btn-info">Cancelar</button>
                 </div>
             </form>
         </div>
@@ -117,7 +182,9 @@ $listaLibros = $sentenciaSQL -> fetchAll(PDO::FETCH_ASSOC);
                     <tr>
                         <td><?php echo $libro['id']; ?></td>
                         <td><?php echo $libro['nombre']; ?></td>
-                        <td><?php echo $libro['imagen']; ?></td>
+                        <td>
+                            <img class="img-thumbnail rounded" src="../../img/<?php echo $libro['imagen']; ?> " alt="" width="100">
+                        </td>
 
                         <td>
                             <form  method='POST'>
